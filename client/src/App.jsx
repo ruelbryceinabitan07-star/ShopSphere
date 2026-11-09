@@ -270,20 +270,47 @@ function App() {
     setOrderMessage("");
 
     try {
+      // GET PRODUCTS FROM MONGODB
+      const productsResponse = await axios.get(
+        "http://localhost:5000/api/products"
+      );
+
+      const databaseProducts = Array.isArray(productsResponse.data)
+        ? productsResponse.data
+        : productsResponse.data.products ||
+          productsResponse.data.data ||
+          [];
+
+      // MATCH CART PRODUCTS WITH MONGODB PRODUCTS
+      const orderItems = cart.map((item) => {
+        const databaseProduct = databaseProducts.find(
+          (product) =>
+            product.name?.toLowerCase() === item.name.toLowerCase()
+        );
+
+        if (!databaseProduct || !databaseProduct._id) {
+          throw new Error(
+            `${item.name} is not available in the database.`
+          );
+        }
+
+        return {
+          productId: databaseProduct._id,
+          quantity: item.quantity
+        };
+      });
+
+      // ORDER DATA
       const orderData = {
         customerName: checkoutData.customerName,
         email: checkoutData.email,
         phone: checkoutData.phone,
         address: checkoutData.address,
         paymentMethod: checkoutData.paymentMethod,
-        items: cart.map((item) => ({
-          productId: item.id,
-          name: item.name,
-          price: item.price,
-          quantity: item.quantity
-        }))
+        items: orderItems
       };
 
+      // SEND ORDER TO BACKEND
       const response = await axios.post(
         "http://localhost:5000/api/orders",
         orderData,
@@ -309,6 +336,7 @@ function App() {
     } catch (error) {
       setOrderMessage(
         error.response?.data?.message ||
+          error.message ||
           "Unable to place your order. Please try again."
       );
     } finally {
